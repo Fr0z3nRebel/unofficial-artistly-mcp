@@ -1,0 +1,14 @@
+<evaluation>
+  <!-- Evaluate against fixture.json only. Do not invoke generation or download tools.
+       A harness may serve fixture records through the read-only MCP tool interfaces. -->
+  <qa_pair><question>Inspect both design pages. Which ready design has landscape dimensions?</question><answer>fixture-landscape-001</answer></qa_pair>
+  <qa_pair><question>Across all pages, how many individual original image URLs belong to ready designs?</question><answer>3</answer></qa_pair>
+  <qa_pair><question>Inspect the completed local job and its design. How many originals could it download?</question><answer>2</answer></qa_pair>
+  <qa_pair><question>Inspect the active local job and resolve its design. What is the upstream status?</question><answer>processing</answer></qa_pair>
+  <qa_pair><question>Follow pagination and identify the design with a reported generation error.</question><answer>fixture-failed-00004</answer></qa_pair>
+  <qa_pair><question>Find the ready design in folder 20 and report its exact pixel dimensions as WIDTHxHEIGHT.</question><answer>832x1216</answer></qa_pair>
+  <qa_pair><question>Inspect all designs in folder 12. How many are currently downloadable?</question><answer>1</answer></qa_pair>
+  <qa_pair><question>Inspect both pages and group by readiness. How many designs are not ready?</question><answer>2</answer></qa_pair>
+  <qa_pair><question>Resolve the completed job and list the extension shared by all of its original image URLs, without the dot.</question><answer>png</answer></qa_pair>
+  <qa_pair><question>Follow the cursor to the final page and determine whether another cursor remains. Answer yes or no.</question><answer>no</answer></qa_pair>
+</evaluation>

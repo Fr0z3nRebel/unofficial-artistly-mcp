@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "artistly": {
+      "command": "/Users/john/Documents/ChatGPT/artistly-to-api/.venv/bin/artistly-mcp",
+      "args": ["serve"]
+    }
+  }
+}

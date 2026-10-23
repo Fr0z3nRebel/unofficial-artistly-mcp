@@ -1,0 +1,17 @@
+{
+  "session": {"authenticated": true},
+  "pages": [
+    {"designs": [
+      {"uuid": "fixture-landscape-001", "status": "private", "ready": true, "width": 1344, "height": 768, "folder_id": 12, "category": "AI Image Designer v6", "image_urls": ["https://cdn.artistly.ai/fixture/a.jpg"]},
+      {"uuid": "fixture-pending-0002", "status": "processing", "ready": false, "width": 1024, "height": 1024, "folder_id": 12, "category": "AI Image Designer v6", "image_urls": []}
+    ], "next_cursor": "fixture-page-2"},
+    {"designs": [
+      {"uuid": "fixture-portrait-003", "status": "private", "ready": true, "width": 832, "height": 1216, "folder_id": 20, "category": "AI Image Designer v6", "image_urls": ["https://cdn.artistly.ai/fixture/b.png", "https://cdn.artistly.ai/fixture/c.png"]},
+      {"uuid": "fixture-failed-00004", "status": "error", "ready": false, "width": 1024, "height": 1024, "folder_id": 20, "category": "AI Image Designer v6", "image_urls": [], "error": "Generation failed"}
+    ], "next_cursor": null}
+  ],
+  "jobs": [
+    {"job_id": "job_00000000000000000000000000000001", "status": "processing", "design_uuids": ["fixture-pending-0002"]},
+    {"job_id": "job_00000000000000000000000000000002", "status": "completed", "design_uuids": ["fixture-portrait-003"]}
+  ]
+}
