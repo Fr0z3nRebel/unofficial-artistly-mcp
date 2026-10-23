@@ -1,8 +1,10 @@
 import json
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, ClassVar, Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .workflows import CHARACTER, IMAGE, Workflow
 
 ASPECT_RATIOS = {
     '1:1': (1024, 1024), '16:9': (1344, 768), '21:9': (1536, 640),
@@ -28,6 +30,7 @@ def is_image_url(value: Any) -> bool:
 
 
 class GenerateInput(BaseModel):
+    workflow: ClassVar[Workflow] = IMAGE
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     prompt: str = Field(min_length=1, max_length=10000, description='Describe the desired image.')
     quality: Literal['fast', 'high_quality'] = Field(default='fast', description='Generation quality.')
@@ -60,6 +63,25 @@ class GenerateInput(BaseModel):
         }
 
 
+class CreateCharacterInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    workflow: ClassVar[Workflow] = CHARACTER
+    prompt: str = Field(min_length=1, max_length=10000, description='Describe the character to create.')
+    quantity: int = Field(default=1, ge=1, le=4, description='Number of character images to generate.')
+    wait_seconds: float = Field(default=15, ge=0, le=45, description='Wait before returning a resumable job.')
+
+    def payload(self) -> dict[str, Any]:
+        # Matches AI Design Assistants → Character Creator, including prompt expansion.
+        return {
+            'checkpointId': 1, 'checkpoint': 'character_creator',
+            'should_extend_prompt': True, 'width': 1024, 'height': 1024,
+            'aspect_ratio': '1:1', 'quantity': self.quantity, 'source_image': None,
+            'seed': 0, 'tool_used': 'AI Design Assistants', 'folder_id': None,
+            'category': 'Character Creator', 'image': '', 'positive_prompt': self.prompt,
+            'dimension': '1:1', 'checkpoint_id': 1, 'visibility': 'private',
+        }
+
+
 class Design(BaseModel):
     uuid: str
     id: int | None = None
@@ -73,6 +95,7 @@ class Design(BaseModel):
     tool_used: str | None = None
     folder_id: int | None = None
     aspect_ratio: str | None = None
+    checkpoint: str | None = None
     created_at: str | None = None
     error: str | None = None
 
@@ -94,6 +117,7 @@ class Design(BaseModel):
             height=raw.get('height'), category=raw.get('category'),
             tool_used=raw.get('tool_used'), folder_id=raw.get('folder_id'),
             aspect_ratio=raw.get('aspect_ratio'),
+            checkpoint=raw.get('checkpoint'),
             created_at=raw.get('created_at'), error=raw.get('user_error'),
         )
 

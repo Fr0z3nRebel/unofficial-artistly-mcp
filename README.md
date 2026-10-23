@@ -1,11 +1,12 @@
 # Artistly MCP
 
-Local MCP server for Artistly's **Fast AI Image Designer → Create From Prompt** workflow.
+Local MCP server for Artistly's **Create From Prompt** and
+**AI Design Assistants → Character Creator** workflows.
 It submits and tracks images using Artistly's internal HTTP endpoints and saves original
 images directly from the CDN. Browser automation is used only for interactive sign-in.
 
 This is an unofficial integration. Internal endpoints can change. The working MVP covers
-Create From Prompt; illustration, upscaling, editing, and other Artistly functions are not
+Create From Prompt and Character Creator; illustration, upscaling, editing, and other functions are not
 implemented. Artistly's [terms](https://artistly.ai/terms/terms.php) apply to use of the service.
 
 ## Setup
@@ -57,6 +58,10 @@ No credentials belong in the MCP configuration.
 - **artistly_session_status**: Check saved authentication and get reconnect instructions.
 - **artistly_generate_image**: Submit Create From Prompt. Inputs are nested in `params`.
   Returns a local `job_id`, status, and any identified designs.
+- **artistly_create_character**: Submit AI Design Assistants → Character Creator. Accepts
+  `prompt`, `quantity` (1–4), and `wait_seconds` in `params`. Creates private, square
+  1024×1024 images with Artistly's automatic prompt expansion. Returns a resumable job.
+  This creates character images; it does not train a Consistent Characters model.
 - **artistly_list_designs**: List one upstream page. Accepts `folder_id`, `tool_used`, and the
   opaque `cursor` from a previous `next_cursor`. Results include metadata and original URLs.
 - **artistly_get_design**: Resume a `job_id`, or retrieve a design UUID. `wait_seconds` is
@@ -85,6 +90,24 @@ Example follow-up arguments:
 {"reference": "job_REPLACE_WITH_RETURNED_ID", "wait_seconds": 15}
 ```
 
+Example Character Creator arguments:
+
+```json
+{
+  "params": {
+    "prompt": "A polar bear wearing a blue hoodie and sunglasses",
+    "quantity": 1,
+    "wait_seconds": 15
+  }
+}
+```
+
+Use the returned `job_id` with the same get and download tools as Create From Prompt.
+Only the controls observed for Character Creator are exposed. Image quality, aspect ratio,
+folder, and public visibility are not character tool inputs.
+Quantity-one creation, job tracking, and original-image download have been verified live
+through MCP. Quantities 2–4 follow the observed form and have schema coverage only.
+
 Example download arguments:
 
 ```json
@@ -102,6 +125,7 @@ Try these requests in your assistant:
 - “Check my Artistly session, generate a private square fox illustration, then save it.”
 - “Show my recent Artistly designs and download the first completed design.”
 - “Check the status of this Artistly job; resume it without creating another image.”
+- “Use Character Creator to make a polar bear in a blue hoodie, then download the image.”
 
 ## Sessions, jobs, and downloads
 
@@ -133,6 +157,16 @@ dimensions, and category. Concurrent manual generations using the same settings 
 correlation ambiguous; avoid generating manually while a local job is active. Ambiguous
 jobs remain blocked rather than guessing. Discovery checks at most five list pages.
 
+Character Creator rewrites the prompt, so its original description cannot be matched
+against the stored result. Its jobs instead require a new UUID, Character Creator category,
+AI Design Assistants tool label, character_creator checkpoint, square dimensions, and a
+creation timestamp at or after preflight (with two seconds of timestamp tolerance).
+Server time is used when available. Avoid **all** manual Character Creator generations
+while an MCP character job is active, even with a different description. Multiple matching
+results stop the job as ambiguous. This correlation cannot distinguish a concurrent manual
+character generation from the MCP submission if only one matching result is visible.
+Existing MVP jobs without a workflow marker continue to resume as image jobs.
+
 If a job cannot be resolved, inspect Personal Designs before explicitly releasing it:
 
 ```sh
@@ -154,6 +188,8 @@ Tests use synthetic data and HTTP mocks: complete generation/download, session e
 reconnection, fresh CSRF metadata, uncertain submissions, restart recovery, cross-process
 serialization, ambiguous and multi-image results, pagination, download validation, file
 permissions, and real MCP stdio handshake/tool calls. Tests never submit paid/live generations.
+Character tests additionally cover rewritten prompts, route-specific CSRF metadata,
+checkpoint/time checks, shared job locking, and compatibility with old image jobs.
 `evals/` includes a frozen fixture and ten read-only agent evaluation questions.
 
 The original live HTTP smoke test and downloaded images are in ignored `test-output/`.

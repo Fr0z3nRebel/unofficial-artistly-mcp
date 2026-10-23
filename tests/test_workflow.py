@@ -19,11 +19,6 @@ OTHER = '01a16678-2731-723d-a7d2-ed26a6362f10'
 IMAGE = 'https://cdn.artistly.ai/test/image.jpg'
 
 
-@pytest.fixture
-def settings(tmp_path: Path) -> Settings:
-    return Settings(tmp_path / 'state', tmp_path / 'downloads')
-
-
 def signed_state(settings: Settings) -> State:
     state = State(settings)
     state.save_session({'cookies': [
@@ -243,7 +238,7 @@ def test_high_quality_wire_value():
 async def test_mcp_tool_catalog_and_missing_session(settings):
     server = create_server(settings)
     tools = await server.list_tools()
-    assert len(tools) == 5
+    assert len(tools) == 6
     for tool in tools:
         assert tool.outputSchema
         assert tool.annotations.destructiveHint is False

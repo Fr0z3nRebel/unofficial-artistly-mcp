@@ -19,6 +19,7 @@ async def test_stdio_handshake_discovery_and_tool_calls(tmp_path):
             assert {t.name for t in tools.tools} == {
                 'artistly_session_status', 'artistly_generate_image', 'artistly_list_designs',
                 'artistly_get_design', 'artistly_download_design',
+                'artistly_create_character',
             }
             status = await session.call_tool('artistly_session_status', {})
             assert not status.isError

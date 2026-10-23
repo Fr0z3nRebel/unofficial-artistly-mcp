@@ -1,5 +1,6 @@
 import json
 import os
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Self
@@ -31,6 +32,7 @@ class ArtistlyClient:
     def __init__(self, state: State, transport: httpx.AsyncBaseTransport | None = None):
         self.state = state
         self.version: str | None = None
+        self.server_time: float | None = None
         self.transport = transport
         self.http = httpx.AsyncClient(
             base_url=BASE_URL, follow_redirects=False, timeout=30,
@@ -77,6 +79,11 @@ class ArtistlyClient:
             raise ArtistlyError('Artistly network request failed. For a submitted generation, '
                                 'resume the job; do not submit it again.') from None
         self.save_session()
+        if response.headers.get('date'):
+            try:
+                self.server_time = parsedate_to_datetime(response.headers['date']).timestamp()
+            except (ValueError, TypeError, OverflowError):
+                pass
         return response
 
     @staticmethod
@@ -109,8 +116,8 @@ class ArtistlyClient:
         except ValueError:
             raise ArtistlyError('Artistly returned an unexpected response format.') from None
 
-    async def prepare_generation(self) -> None:
-        response = await self.request('GET', DESIGNER_PATH, headers={'Accept': 'text/html'})
+    async def prepare_generation(self, designer_path: str = DESIGNER_PATH) -> None:
+        response = await self.request('GET', designer_path, headers={'Accept': 'text/html'})
         self.check_response(response)
         if response.status_code != 200:
             raise SessionExpired()
@@ -139,14 +146,14 @@ class ArtistlyClient:
         raw = await self.get_json('/api/internal/designs/' + uuid)
         return Design.from_api(raw['data'])
 
-    async def submit(self, payload: dict[str, Any]) -> httpx.Response:
+    async def submit(self, payload: dict[str, Any], designer_path: str = DESIGNER_PATH) -> httpx.Response:
         token = next((c.value for c in self.http.cookies.jar if c.name == 'XSRF-TOKEN'), None)
         if not token:
             raise SessionExpired()
-        return await self.request('POST', DESIGNER_PATH + '/store', json=payload, headers={
+        return await self.request('POST', designer_path + '/store', json=payload, headers={
             'X-XSRF-TOKEN': unquote(token), 'X-Inertia': 'true',
             'X-Inertia-Version': self.version or '', 'Origin': BASE_URL,
-            'Referer': BASE_URL + DESIGNER_PATH,
+            'Referer': BASE_URL + designer_path,
         })
 
     async def download(self, design: Design, directory: Path) -> tuple[list[str], int]:

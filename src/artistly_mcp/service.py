@@ -1,10 +1,11 @@
 import asyncio
 import time
+from datetime import datetime
 from typing import Any
 
 from .client import ArtistlyClient
 from .config import Settings
-from .models import Design, GenerateInput, JobResult
+from .models import CreateCharacterInput, Design, GenerateInput, JobResult
 from .state import ArtistlyError, SessionExpired, State
 
 
@@ -13,16 +14,18 @@ class ArtistlyService:
         self.settings = settings
         self.state = State(settings)
 
-    async def generate(self, client: ArtistlyClient, params: GenerateInput) -> JobResult:
-        await client.prepare_generation()
+    async def generate(self, client: ArtistlyClient,
+                       params: GenerateInput | CreateCharacterInput) -> JobResult:
+        await client.prepare_generation(params.workflow.page_path)
         page = await client.list_designs()
         job = self.state.create_job({
             'request': params.model_dump(), 'baseline': [d.uuid for d in page.designs],
-            'created_at': time.time(), 'message': None,
+            'workflow': params.workflow.key,
+            'created_at': client.server_time or time.time(), 'message': None,
         })
         # Persist the intent before POST. Cancellation, timeout, and 5xx leave a resumable job.
         try:
-            response = await client.submit(params.payload())
+            response = await client.submit(params.payload(), params.workflow.page_path)
         except ArtistlyError:
             job.update(status='awaiting_design', message='Submission outcome is uncertain. '
                        'Resume this job; do not generate again.')
@@ -51,7 +54,9 @@ class ArtistlyService:
     async def refresh_job(self, client: ArtistlyClient, job: dict[str, Any]) -> JobResult:
         if job['status'] in ('failed', 'abandoned'):
             return JobResult(job_id=job['job_id'], status=job['status'], message=job.get('message'))
-        params = GenerateInput(**job['request'])
+        # Old MVP jobs have no workflow key and remain image jobs.
+        input_type = CreateCharacterInput if job.get('workflow') == 'character' else GenerateInput
+        params = input_type(**job['request'])
         designs: list[Design] = []
         if job['design_uuids']:
             designs = [await client.get_design(uuid) for uuid in job['design_uuids']]
@@ -65,12 +70,24 @@ class ArtistlyService:
                 for candidate in page.designs:
                     if candidate.uuid in baseline:
                         continue
-                    if candidate.category != 'AI Image Designer v6':
+                    if candidate.category != params.workflow.category:
                         continue
                     detail = await client.get_design(candidate.uuid)
                     width, height = params.payload()['width'], params.payload()['height']
-                    if (detail.prompt == params.prompt and detail.width == width
-                            and detail.height == height):
+                    matches = detail.width == width and detail.height == height
+                    if params.workflow.rewrites_prompt:
+                        # Character Creator replaces the prompt. Require exact workflow metadata
+                        # and a creation time at/after preflight rather than fuzzy prompt matching.
+                        try:
+                            created_at = datetime.fromisoformat(detail.created_at or '').timestamp()
+                        except ValueError:
+                            created_at = 0
+                        matches = (matches and detail.tool_used == params.workflow.tool_used
+                                   and detail.checkpoint == params.workflow.checkpoint
+                                   and created_at >= job['created_at'] - 2)
+                    else:
+                        matches = matches and detail.prompt == params.prompt
+                    if matches:
                         candidates.append(detail)
                 if any(d.uuid in baseline for d in page.designs) or not page.next_cursor:
                     break

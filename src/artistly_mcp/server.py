@@ -7,6 +7,7 @@ from pydantic import Field
 from .client import ArtistlyClient
 from .config import Settings
 from .models import (
+    CreateCharacterInput,
     DesignPage,
     DownloadResult,
     GenerateInput,
@@ -27,7 +28,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     settings = settings or Settings.from_env()
     service = ArtistlyService(settings)
     mcp = FastMCP('artistly_mcp', instructions=(
-        'Artistly Create From Prompt tools. Generate once, then resume using the returned job_id. '
+        'Artistly Create From Prompt and Character Creator tools. Generate once, then resume '
+        'using the returned job_id. '
         'Never automatically repeat a generation after timeout or uncertain outcome. '
         'Use artistly_session_status first. Session credentials are configured locally with '
         '`artistly-mcp login`; never request passwords or cookies in chat. '
@@ -51,6 +53,24 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         Returns a durable job_id plus status and available designs. If incomplete, use
         artistly_get_design with that job_id. Do not repeat generation to check progress.
         Only one local job may be active. Public visibility must be explicitly requested.
+        """
+        try:
+            async with ArtistlyClient(service.state) as client:
+                return await service.generate(client, params)
+        except ArtistlyError as exc:
+            raise ToolError(str(exc)) from None
+
+    @mcp.tool(annotations=WRITE)
+    async def artistly_create_character(params: CreateCharacterInput) -> JobResult:
+        """Create 1–4 character images using AI Design Assistants → Character Creator.
+
+        Artistly automatically expands the description. Images are private and 1024×1024.
+        Returns a durable job_id; use artistly_get_design and artistly_download_design to
+        resume and save results. Does not train a reusable Consistent Characters model.
+        Avoid manual Character Creator generations while this job is active: prompts are
+        rewritten, so correlation uses new IDs, category, checkpoint, and creation time.
+        If multiple results could match, the job stops as ambiguous rather than guessing.
+        Never repeat creation just to check progress.
         """
         try:
             async with ArtistlyClient(service.state) as client:
