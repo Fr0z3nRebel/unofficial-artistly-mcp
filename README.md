@@ -77,7 +77,17 @@ server connection to load new tools and dependencies.
 - **artistly_download_design**: Save all originals for a completed job or ready design UUID.
   Returns absolute local paths and total bytes. Repeating it creates new copies.
 
-Example generation arguments:
+## Complete agent workflow
+
+For a request such as “Generate a private square dog portrait and save it locally,”
+use the sequence below. Response snippets show the fields needed for the next step;
+actual responses also include design details and messages.
+
+1. Call **artistly_session_status** with `{}`. Continue when `authenticated` is `true`.
+   Otherwise follow the returned message; sign-in uses the local `artistly-mcp login`
+   command. Never ask the user to paste passwords or cookies into chat.
+
+2. Call **artistly_generate_image** once:
 
 ```json
 {
@@ -87,16 +97,46 @@ Example generation arguments:
     "aspect_ratio": "1:1",
     "quantity": 1,
     "visibility": "private",
-    "wait_seconds": 15
+    "wait_seconds": 0
   }
 }
 ```
 
-Example follow-up arguments:
+An illustrative response identifies the job:
 
 ```json
-{"reference": "job_REPLACE_WITH_RETURNED_ID", "wait_seconds": 15}
+{"job_id": "job_0123456789abcdef0123456789abcdef", "status": "processing"}
 ```
+
+3. Call **artistly_get_design** using the actual returned ID:
+
+```json
+{"reference": "job_0123456789abcdef0123456789abcdef", "wait_seconds": 15}
+```
+
+Repeat this read call while the job is `pending`, `awaiting_design`, or `processing`.
+When it returns `completed`, proceed to download. If it is already completed in the
+generation response, skip the wait step. Stop and explain `failed` or `ambiguous` results.
+For an `uploading` job, follow its message and check the existing process; tracking does
+not restart an interrupted upload. Never repeat generation to check progress or recover
+from a timeout. If no ID was returned before an interruption, use the local
+`artistly-mcp jobs` command to recover it, or ask the user to retrieve it.
+
+4. Call **artistly_download_design**:
+
+```json
+{"reference": "job_0123456789abcdef0123456789abcdef"}
+```
+
+Return the absolute paths in `paths` to the user. Another download call creates more
+copies, so use the returned paths instead of downloading again just to display a result.
+
+Use the same wait/download sequence for Character Creator and Consistent Character.
+Choose Character Creator to invent a character from text. Choose Consistent Character
+to reuse an existing character, always with a user-provided local reference image.
+Only one local generation job can be active; avoid concurrent manual browser generations.
+
+## Other generation examples
 
 Example Character Creator arguments:
 

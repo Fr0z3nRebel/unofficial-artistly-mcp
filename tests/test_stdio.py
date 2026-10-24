@@ -15,6 +15,13 @@ async def test_stdio_handshake_discovery_and_tool_calls(tmp_path):
         async with ClientSession(reader, writer) as session:
             initialized = await session.initialize()
             assert initialized.serverInfo.name == 'artistly_mcp'
+            # Verify workflow guidance is delivered in the protocol handshake, not just the README.
+            assert initialized.instructions
+            assert 'artistly_consistent_character' in initialized.instructions
+            assert 'image_path' in initialized.instructions
+            assert 'artistly_get_design' in initialized.instructions
+            assert 'artistly_download_design' in initialized.instructions
+            assert 'Never repeat a generation call' in initialized.instructions
             tools = await session.list_tools()
             assert {t.name for t in tools.tools} == {
                 'artistly_session_status', 'artistly_generate_image', 'artistly_list_designs',

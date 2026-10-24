@@ -28,15 +28,35 @@ WRITE = {'readOnlyHint': False, 'destructiveHint': False,
 def create_server(settings: Settings | None = None) -> FastMCP:
     settings = settings or Settings.from_env()
     service = ArtistlyService(settings)
-    mcp = FastMCP('artistly_mcp', instructions=(
-        'Artistly Create From Prompt, Character Creator, and styled Consistent Character tools. '
-        'Generate once, then resume '
-        'using the returned job_id. '
-        'Never automatically repeat a generation after timeout or uncertain outcome. '
-        'Use artistly_session_status first. Session credentials are configured locally with '
-        '`artistly-mcp login`; never request passwords or cookies in chat. '
-        'Other Artistly generation functions are not supported yet.'
-    ))
+    mcp = FastMCP('artistly_mcp', instructions='''
+Use this workflow for Artistly requests:
+1. Call artistly_session_status first. If authentication cannot be confirmed, follow its
+   message. Session setup and renewal use the local `artistly-mcp login` command. Never
+   request passwords or session cookies in chat or tool arguments.
+2. Choose artistly_generate_image for a new image from a prompt;
+   artistly_create_character for a new character from a description; or
+   artistly_consistent_character for a new scene with an existing user-provided character.
+   Generation tool inputs belong inside `params`. Consistent Character requires an
+   accessible local image_path supplied or explicitly identified by the user. An attachment
+   must first be available as a local file. Do not invent paths, select unrelated files,
+   or substitute library designs. This tool uploads the reference image to Artistly.
+3. Submit the selected generation tool once and retain its returned job_id. Only one local
+   job can be active. Keep visibility private unless public visibility is explicitly requested
+   and supported by the selected tool. Avoid concurrent manual browser generations.
+4. If not completed, call artistly_get_design with reference=job_id and wait_seconds=15.
+   Continue checking pending, awaiting_design, or processing jobs through this read tool.
+   Never repeat a generation call to check progress, after a timeout, or after an uncertain
+   submission outcome. If a call was interrupted before returning an ID, recover it with
+   the local `artistly-mcp jobs` command when available, or ask the user to retrieve it.
+   Stop and explain failed or ambiguous results. For uploading jobs, follow the returned
+   message and check the existing process; tracking does not restart interrupted uploads.
+5. Once completed, call artistly_download_design with reference=job_id if the user requested
+   local files. Return its absolute paths. Repeating a download creates additional copies.
+Use artistly_list_designs to browse existing designs and pass its next_cursor as cursor
+for subsequent pages. Existing design UUIDs also work with the get and download tools.
+Only Create From Prompt, Character Creator, and Consistent Character mode='styled' are
+supported. Realistic Images, Multi-consistent Characters, and library input are unavailable.
+'''.strip())
 
     @mcp.tool(annotations=READ)
     async def artistly_session_status() -> SessionStatus:
