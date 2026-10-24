@@ -5,8 +5,9 @@ from typing import Any
 
 from .client import ArtistlyClient
 from .config import Settings
-from .models import CreateCharacterInput, Design, GenerateInput, JobResult
+from .models import ConsistentCharacterInput, CreateCharacterInput, Design, GenerateInput, JobResult
 from .state import ArtistlyError, SessionExpired, State
+from .uploads import read_upload_image
 
 
 class ArtistlyService:
@@ -15,7 +16,10 @@ class ArtistlyService:
         self.state = State(settings)
 
     async def generate(self, client: ArtistlyClient,
-                       params: GenerateInput | CreateCharacterInput) -> JobResult:
+                       params: GenerateInput | CreateCharacterInput | ConsistentCharacterInput) -> JobResult:
+        image = None
+        if isinstance(params, ConsistentCharacterInput):
+            image = await asyncio.to_thread(read_upload_image, params.image_path)
         await client.prepare_generation(params.workflow.page_path)
         page = await client.list_designs()
         job = self.state.create_job({
@@ -23,9 +27,24 @@ class ArtistlyService:
             'workflow': params.workflow.key,
             'created_at': client.server_time or time.time(), 'message': None,
         })
+        payload = params.payload()
+        if image is not None:
+            job.update(status='uploading', submission_attempted=False)
+            self.state.save_job(job)
+            try:
+                reference = await client.upload_image(image)
+            except ArtistlyError as exc:
+                job.update(status='failed', message='Image upload failed. No generation request '
+                           'was sent. ' + str(exc))
+                self.state.save_job(job)
+                return JobResult(job_id=job['job_id'], status='failed', message=job['message'])
+            job['uploaded_image'] = reference
+            payload['image'] = reference
+        job.update(status='pending', submission_attempted=True)
+        self.state.save_job(job)
         # Persist the intent before POST. Cancellation, timeout, and 5xx leave a resumable job.
         try:
-            response = await client.submit(params.payload(), params.workflow.page_path)
+            response = await client.submit(payload, params.workflow.page_path)
         except ArtistlyError:
             job.update(status='awaiting_design', message='Submission outcome is uncertain. '
                        'Resume this job; do not generate again.')
@@ -55,7 +74,14 @@ class ArtistlyService:
         if job['status'] in ('failed', 'abandoned'):
             return JobResult(job_id=job['job_id'], status=job['status'], message=job.get('message'))
         # Old MVP jobs have no workflow key and remain image jobs.
-        input_type = CreateCharacterInput if job.get('workflow') == 'character' else GenerateInput
+        if job.get('submission_attempted') is False:
+            return JobResult(job_id=job['job_id'], status='uploading', message=(
+                'No generation submission was recorded. The image upload may still be running. '
+                'If its process was interrupted, inspect Personal Designs before releasing the '
+                'local job with artistly-mcp abandon-job. Tracking never restarts uploads.'
+            ))
+        input_type = {'character': CreateCharacterInput, 'consistent_styled': ConsistentCharacterInput}.get(
+            job.get('workflow'), GenerateInput)
         params = input_type(**job['request'])
         designs: list[Design] = []
         if job['design_uuids']:
@@ -87,6 +113,9 @@ class ArtistlyService:
                                    and created_at >= job['created_at'] - 2)
                     else:
                         matches = matches and detail.prompt == params.prompt
+                        if isinstance(params, ConsistentCharacterInput):
+                            matches = (matches and detail.checkpoint == params.workflow.checkpoint
+                                       and detail.tool_used == params.workflow.tool_used)
                     if matches:
                         candidates.append(detail)
                 if any(d.uuid in baseline for d in page.designs) or not page.next_cursor:

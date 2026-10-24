@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -11,6 +12,7 @@ import httpx
 
 from .models import Design, DesignPage
 from .state import ArtistlyError, SessionExpired, State
+from .uploads import UPLOAD_CHUNK_BYTES, UploadImage
 
 BASE_URL = 'https://app.artistly.ai'
 DESIGNER_PATH = '/ai/image-designer-v6'
@@ -155,6 +157,38 @@ class ArtistlyClient:
             'X-Inertia-Version': self.version or '', 'Origin': BASE_URL,
             'Referer': BASE_URL + designer_path,
         })
+
+    async def upload_image(self, image: UploadImage) -> str:
+        """Upload once using the observed FilePond POST/PATCH flow. No generation here."""
+        token = next((c.value for c in self.http.cookies.jar if c.name == 'XSRF-TOKEN'), None)
+        if not token:
+            raise SessionExpired()
+        headers = {'X-XSRF-TOKEN': unquote(token), 'Origin': BASE_URL,
+                   'Referer': BASE_URL + '/ai/consistent-characters',
+                   'Accept': '*/*', 'Upload-Length': str(len(image.data))}
+        response = await self.request('POST', '/upload/chunk', headers=headers,
+                                      files={'filepond': (None, '{"color":null}')})
+        self.check_response(response)
+        upload_id = response.text.strip()
+        if response.status_code != 200 or not re.fullmatch(r'[A-Za-z0-9-]{16,64}', upload_id):
+            raise ArtistlyError('Artistly did not return a valid upload reference. No generation was submitted.')
+        for offset in range(0, len(image.data), UPLOAD_CHUNK_BYTES):
+            chunk = image.data[offset:offset + UPLOAD_CHUNK_BYTES]
+            response = await self.request('PATCH', '/upload/chunk', params={'patch': upload_id},
+                                          content=chunk, headers={**headers,
+                                              'Upload-Name': 'reference.' + image.extension,
+                                              'Upload-Offset': str(offset),
+                                              'Content-Type': 'application/offset+octet-stream'})
+            self.check_response(response)
+            if response.status_code != 200:
+                raise ArtistlyError('Reference image upload was not accepted. No generation was submitted.')
+        try:
+            if response.json().get('uploaded') is not True:
+                raise ValueError
+        except (ValueError, AttributeError):
+            raise ArtistlyError('Artistly did not confirm the completed image upload. '
+                                'No generation was submitted.') from None
+        return f'temp/completed/{upload_id}.{image.extension}'
 
     async def download(self, design: Design, directory: Path) -> tuple[list[str], int]:
         if not design.ready:

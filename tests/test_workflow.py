@@ -238,7 +238,7 @@ def test_high_quality_wire_value():
 async def test_mcp_tool_catalog_and_missing_session(settings):
     server = create_server(settings)
     tools = await server.list_tools()
-    assert len(tools) == 6
+    assert len(tools) == 7
     for tool in tools:
         assert tool.outputSchema
         assert tool.annotations.destructiveHint is False

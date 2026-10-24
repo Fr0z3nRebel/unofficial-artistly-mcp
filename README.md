@@ -1,13 +1,15 @@
 # Artistly MCP
 
-Local MCP server for Artistly's **Create From Prompt** and
-**AI Design Assistants → Character Creator** workflows.
+Local MCP server for Artistly's **Create From Prompt**,
+**AI Design Assistants → Character Creator**, and **Consistent Characters →
+3d & 2d Style Images** workflows.
 It submits and tracks images using Artistly's internal HTTP endpoints and saves original
 images directly from the CDN. Browser automation is used only for interactive sign-in.
 
 This is an unofficial integration. Internal endpoints can change. The working MVP covers
-Create From Prompt and Character Creator; illustration, upscaling, editing, and other functions are not
-implemented. Artistly's [terms](https://artistly.ai/terms/terms.php) apply to use of the service.
+these three workflows. Consistent Characters Realistic Images and Multi-consistent Characters,
+illustration, upscaling, and other functions are not implemented. Artistly's
+[terms](https://artistly.ai/terms/terms.php) apply to use of the service.
 
 ## Setup
 
@@ -52,6 +54,8 @@ Use this local stdio server definition in a client that supports MCP:
 `examples/mcp.json` contains that configuration. Client-specific configuration formats may
 differ. The server has no HTTP listener. It writes only MCP protocol messages to stdout.
 No credentials belong in the MCP configuration.
+After updating the project, run `uv sync --extra dev --locked` and restart your MCP
+server connection to load new tools and dependencies.
 
 ## Tools
 
@@ -62,6 +66,10 @@ No credentials belong in the MCP configuration.
   `prompt`, `quantity` (1–4), and `wait_seconds` in `params`. Creates private, square
   1024×1024 images with Artistly's automatic prompt expansion. Returns a resumable job.
   This creates character images; it does not train a Consistent Characters model.
+- **artistly_consistent_character**: Upload a required user-provided reference image and
+  generate a new scene using Consistent Characters → 3d & 2d Style Images. Accepts
+  `image_path`, `prompt`, `aspect_ratio`, `mode="styled"`, and `wait_seconds` in `params`.
+  Creates one private image and returns a resumable job. Library selection is unavailable.
 - **artistly_list_designs**: List one upstream page. Accepts `folder_id`, `tool_used`, and the
   opaque `cursor` from a previous `next_cursor`. Results include metadata and original URLs.
 - **artistly_get_design**: Resume a `job_id`, or retrieve a design UUID. `wait_seconds` is
@@ -108,6 +116,33 @@ folder, and public visibility are not character tool inputs.
 Quantity-one creation, job tracking, and original-image download have been verified live
 through MCP. Quantities 2–4 follow the observed form and have schema coverage only.
 
+Example Consistent Character arguments:
+
+```json
+{
+  "params": {
+    "mode": "styled",
+    "image_path": "/absolute/path/to/user-provided-character.jpg",
+    "prompt": "the character is sitting on a bench",
+    "aspect_ratio": "16:9",
+    "wait_seconds": 15
+  }
+}
+```
+
+The reference must be an accessible local JPEG, PNG, or WebP image, at most 20 MiB and
+40 megapixels. Its format and decoded content are validated before any upload request.
+The client must make an attached image available as a local file before calling this
+tool; an attachment identifier, URL, or library design is not an image_path. The server
+uploads the provided image to Artistly using its chunked upload protocol and preserves
+the original file. It never selects a reference image on the user's behalf.
+JPEG upload, 16:9 generation (1344×768), tracking, and download have been verified live
+through MCP. PNG/WebP validation and chunk offsets have automated coverage.
+
+Only styled mode is enabled. Realistic Images remains deferred after the browser
+workflow returned face-processing failures. Its gender and High/Low similarity controls
+are not inputs to styled mode. Multi-consistent Characters is also deferred.
+
 Example download arguments:
 
 ```json
@@ -126,6 +161,7 @@ Try these requests in your assistant:
 - “Show my recent Artistly designs and download the first completed design.”
 - “Check the status of this Artistly job; resume it without creating another image.”
 - “Use Character Creator to make a polar bear in a blue hoodie, then download the image.”
+- “Use this local character image to make a 16:9 bench scene with Consistent Character.”
 
 ## Sessions, jobs, and downloads
 
@@ -167,6 +203,17 @@ results stop the job as ambiguous. This correlation cannot distinguish a concurr
 character generation from the MCP submission if only one matching result is visible.
 Existing MVP jobs without a workflow marker continue to resume as image jobs.
 
+Styled Consistent Character jobs match the unchanged prompt, dimensions, category,
+tool label, and checkpoint. They share the same single-active-job protection as the
+other generation tools. Image uploads complete before the generation request is sent.
+If upload fails, the job reports failure and no generation is submitted. Uploads and
+generation submissions are never automatically retried. If a process is interrupted
+during upload, tracking reports that no generation submission was recorded; it does
+not restart the upload. Check the local process before explicitly releasing that job.
+Once submission is recorded, tracking no longer needs the local reference file and
+never uploads it again. The private job database stores its original local path and
+the temporary Artistly upload reference, but not a copy of the image bytes.
+
 If a job cannot be resolved, inspect Personal Designs before explicitly releasing it:
 
 ```sh
@@ -190,6 +237,8 @@ serialization, ambiguous and multi-image results, pagination, download validatio
 permissions, and real MCP stdio handshake/tool calls. Tests never submit paid/live generations.
 Character tests additionally cover rewritten prompts, route-specific CSRF metadata,
 checkpoint/time checks, shared job locking, and compatibility with old image jobs.
+Consistent Character tests cover required image input, decoded file validation, chunk
+offsets, invalid upload references, failed uploads, and recovery without duplicate uploads.
 `evals/` includes a frozen fixture and ten read-only agent evaluation questions.
 
 The original live HTTP smoke test and downloaded images are in ignored `test-output/`.

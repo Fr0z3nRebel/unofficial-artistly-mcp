@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .workflows import CHARACTER, IMAGE, Workflow
+from .workflows import CHARACTER, CONSISTENT_STYLED, IMAGE, Workflow
 
 ASPECT_RATIOS = {
     '1:1': (1024, 1024), '16:9': (1344, 768), '21:9': (1536, 640),
@@ -79,6 +79,36 @@ class CreateCharacterInput(BaseModel):
             'seed': 0, 'tool_used': 'AI Design Assistants', 'folder_id': None,
             'category': 'Character Creator', 'image': '', 'positive_prompt': self.prompt,
             'dimension': '1:1', 'checkpoint_id': 1, 'visibility': 'private',
+        }
+
+
+class ConsistentCharacterInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    workflow: ClassVar[Workflow] = CONSISTENT_STYLED
+    quantity: ClassVar[int] = 1
+    mode: Literal['styled'] = Field(default='styled', description='3D & 2D Style Images. Realistic and multi-character modes are not available yet.')
+    image_path: str = Field(min_length=1, description='Absolute local path to a user-provided JPEG, PNG, or WebP reference image to upload to Artistly. Always required; do not choose files without user direction.')
+    prompt: str = Field(min_length=1, max_length=10000, description='Describe the new scene or action for the same character.')
+    aspect_ratio: str = Field(default='1:1', description='Output width:height ratio, such as 1:1 or 16:9.')
+    wait_seconds: float = Field(default=15, ge=0, le=45, description='Wait before returning a resumable job.')
+
+    @field_validator('aspect_ratio')
+    @classmethod
+    def valid_ratio(cls, value: str) -> str:
+        if value not in ASPECT_RATIOS:
+            raise ValueError('Choose one of: ' + ', '.join(ASPECT_RATIOS))
+        return value
+
+    def payload(self, uploaded_image: str = '') -> dict[str, Any]:
+        width, height = ASPECT_RATIOS[self.aspect_ratio]
+        return {
+            'checkpointId': 1, 'checkpoint': '3d & 2d Style Images',
+            'width': width, 'height': height, 'aspect_ratio': self.aspect_ratio,
+            'quantity': 1, 'source_image': None, 'seed': 0,
+            'tool_used': 'Consistent Characters', 'folder_id': None,
+            'category': '3d & 2d Style Images', 'image': uploaded_image,
+            'positive_prompt': self.prompt, 'face_swap': False, 'gender': 'male',
+            'dimension': self.aspect_ratio, 'lora': 'subject', 'visibility': 'private',
         }
 
 

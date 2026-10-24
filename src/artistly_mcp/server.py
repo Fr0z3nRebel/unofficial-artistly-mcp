@@ -7,6 +7,7 @@ from pydantic import Field
 from .client import ArtistlyClient
 from .config import Settings
 from .models import (
+    ConsistentCharacterInput,
     CreateCharacterInput,
     DesignPage,
     DownloadResult,
@@ -28,7 +29,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     settings = settings or Settings.from_env()
     service = ArtistlyService(settings)
     mcp = FastMCP('artistly_mcp', instructions=(
-        'Artistly Create From Prompt and Character Creator tools. Generate once, then resume '
+        'Artistly Create From Prompt, Character Creator, and styled Consistent Character tools. '
+        'Generate once, then resume '
         'using the returned job_id. '
         'Never automatically repeat a generation after timeout or uncertain outcome. '
         'Use artistly_session_status first. Session credentials are configured locally with '
@@ -71,6 +73,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         rewritten, so correlation uses new IDs, category, checkpoint, and creation time.
         If multiple results could match, the job stops as ambiguous rather than guessing.
         Never repeat creation just to check progress.
+        """
+        try:
+            async with ArtistlyClient(service.state) as client:
+                return await service.generate(client, params)
+        except ArtistlyError as exc:
+            raise ToolError(str(exc)) from None
+
+    @mcp.tool(annotations=WRITE)
+    async def artistly_consistent_character(params: ConsistentCharacterInput) -> JobResult:
+        """Generate a new scene with the same user-provided character using 3D & 2D Style Images.
+
+        Requires a user-provided local image_path (JPEG, PNG, or WebP; maximum 20 MiB and
+        40 megapixels), prompt, and optional aspect_ratio. Uploads that image to Artistly.
+        Always creates one private image. Only mode='styled' is supported; Realistic Images
+        and Multi-consistent Characters are unavailable. Library selection is not supported.
+        Returns a durable job_id; resume with artistly_get_design and save with
+        artistly_download_design. Never repeat this tool call just to check progress.
         """
         try:
             async with ArtistlyClient(service.state) as client:

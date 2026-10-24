@@ -20,6 +20,7 @@ async def test_stdio_handshake_discovery_and_tool_calls(tmp_path):
                 'artistly_session_status', 'artistly_generate_image', 'artistly_list_designs',
                 'artistly_get_design', 'artistly_download_design',
                 'artistly_create_character',
+                'artistly_consistent_character',
             }
             status = await session.call_tool('artistly_session_status', {})
             assert not status.isError
@@ -29,3 +30,8 @@ async def test_stdio_handshake_discovery_and_tool_calls(tmp_path):
             missing = await session.call_tool('artistly_list_designs', {})
             assert missing.isError
             assert 'login' in missing.content[0].text
+            missing_image = await session.call_tool('artistly_consistent_character', {
+                'params': {'prompt': 'a scene'},
+            })
+            assert missing_image.isError
+            assert 'image_path' in missing_image.content[0].text
