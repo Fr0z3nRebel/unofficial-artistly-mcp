@@ -17,6 +17,7 @@ async def test_stdio_handshake_discovery_and_tool_calls(tmp_path):
             assert initialized.serverInfo.name == 'artistly_mcp'
             # Verify workflow guidance is delivered in the protocol handshake, not just the README.
             assert initialized.instructions
+            assert 'artistly_generate_text_image' in initialized.instructions
             assert 'artistly_consistent_character' in initialized.instructions
             assert 'image_path' in initialized.instructions
             assert 'artistly_get_design' in initialized.instructions
@@ -28,6 +29,7 @@ async def test_stdio_handshake_discovery_and_tool_calls(tmp_path):
                 'artistly_get_design', 'artistly_download_design',
                 'artistly_create_character',
                 'artistly_consistent_character',
+                'artistly_generate_text_image',
             }
             status = await session.call_tool('artistly_session_status', {})
             assert not status.isError

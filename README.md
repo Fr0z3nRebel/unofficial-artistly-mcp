@@ -1,13 +1,13 @@
 # Artistly MCP
 
-Local MCP server for Artistly's **Create From Prompt**,
+Local MCP server for Artistly's **Create From Prompt**, **Perfect Text in Image Designer**,
 **AI Design Assistants → Character Creator**, and **Consistent Characters →
 3d & 2d Style Images** workflows.
 It submits and tracks images using Artistly's internal HTTP endpoints and saves original
 images directly from the CDN. Browser automation is used only for interactive sign-in.
 
 This is an unofficial integration. Internal endpoints can change. The working MVP covers
-these three workflows. Consistent Characters Realistic Images and Multi-consistent Characters,
+these four workflows. Consistent Characters Realistic Images and Multi-consistent Characters,
 illustration, upscaling, and other functions are not implemented. Artistly's
 [terms](https://artistly.ai/terms/terms.php) apply to use of the service.
 
@@ -16,7 +16,7 @@ illustration, upscaling, and other functions are not implemented. Artistly's
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```sh
-cd /Users/john/Documents/ChatGPT/artistly-to-api
+cd /Users/john/Documents/ChatGPT/artistly-mcp
 uv sync --extra dev --locked
 uv run playwright install chromium
 uv run artistly-mcp login
@@ -44,7 +44,7 @@ Use this local stdio server definition in a client that supports MCP:
 {
   "mcpServers": {
     "artistly": {
-      "command": "/Users/john/Documents/ChatGPT/artistly-to-api/.venv/bin/artistly-mcp",
+      "command": "/Users/john/Documents/ChatGPT/artistly-mcp/.venv/bin/artistly-mcp",
       "args": ["serve"]
     }
   }
@@ -62,6 +62,10 @@ server connection to load new tools and dependencies.
 - **artistly_session_status**: Check saved authentication and get reconnect instructions.
 - **artistly_generate_image**: Submit Create From Prompt. Inputs are nested in `params`.
   Returns a local `job_id`, status, and any identified designs.
+- **artistly_generate_text_image**: Use Perfect Text in Image Designer for images with
+  lettering. Include the exact text in double quotes within `prompt`. Creates one image
+  with optional aspect ratio, prompt enhancement, existing folder ID, and visibility.
+  Defaults are private, square, and enhancement enabled.
 - **artistly_create_character**: Submit AI Design Assistants → Character Creator. Accepts
   `prompt`, `quantity` (1–4), and `wait_seconds` in `params`. Creates private, square
   1024×1024 images with Artistly's automatic prompt expansion. Returns a resumable job.
@@ -137,6 +141,30 @@ to reuse an existing character, always with a user-provided local reference imag
 Only one local generation job can be active; avoid concurrent manual browser generations.
 
 ## Other generation examples
+
+Example Perfect Text arguments:
+
+```json
+{
+  "params": {
+    "prompt": "A warm cafe storefront with a clear sign reading \"GOOD MORNING\"",
+    "aspect_ratio": "16:9",
+    "enhance_prompt": true,
+    "wait_seconds": 15
+  }
+}
+```
+
+Call **artistly_generate_text_image**, then use its job_id with the existing get and
+download tools. Quality and quantity are not exposed because the Perfect Text frontend
+hides those controls and submits one image. Inspect the rendered spelling; no automatic
+regeneration is performed. When enhancement is enabled, Artistly may rewrite the prompt,
+so correlation uses new UUIDs, category, checkpoint, dimensions, and creation time.
+Avoid concurrent manual Perfect Text generations. With enhancement disabled, the stored
+prompt must match the submitted prompt in addition to workflow metadata.
+The enhanced 4:5 workflow (896×1088) was verified live through MCP, including download
+and visual confirmation of the requested lettering. Enhancement-disabled behavior has
+automated coverage.
 
 Example Character Creator arguments:
 

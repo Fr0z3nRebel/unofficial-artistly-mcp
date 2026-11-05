@@ -17,3 +17,7 @@ CHARACTER = Workflow('character', '/ai/ai-design-assistants', 'Character Creator
 CONSISTENT_STYLED = Workflow('consistent_styled', '/ai/consistent-characters',
                              '3d & 2d Style Images', 'Consistent Characters',
                              checkpoint='3d & 2d Style Images')
+
+PERFECT_TEXT = Workflow('perfect_text', '/ai/image-designer-v6',
+                        'Perfect Text in Image Designer', 'AI Image Designer v6',
+                        checkpoint='Perfect Text in Image Designer', rewrites_prompt=True)

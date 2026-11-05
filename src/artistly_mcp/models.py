@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .workflows import CHARACTER, CONSISTENT_STYLED, IMAGE, Workflow
+from .workflows import CHARACTER, CONSISTENT_STYLED, IMAGE, PERFECT_TEXT, Workflow
 
 ASPECT_RATIOS = {
     '1:1': (1024, 1024), '16:9': (1344, 768), '21:9': (1536, 640),
@@ -61,6 +61,32 @@ class GenerateInput(BaseModel):
             'denoise_strength': '0.75', 'prefix': '', 'suffix': '', 'lora': None,
             'should_enhance_prompt': False, 'visibility': self.visibility,
         }
+
+
+class TextImageInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    workflow: ClassVar[Workflow] = PERFECT_TEXT
+    quantity: ClassVar[int] = 1
+    prompt: str = Field(min_length=1, max_length=10000, description='Describe the image and include the exact text to render in double quotes, e.g. a cafe sign reading "GOOD MORNING".')
+    aspect_ratio: str = Field(default='1:1', description='Supported output width:height ratio, e.g. 16:9.')
+    enhance_prompt: bool = Field(default=True, description='Allow Artistly to enhance the prompt, matching the frontend default. Disable to submit without enhancement.')
+    folder_id: int | None = Field(default=None, gt=0, description='Existing Artistly folder ID.')
+    visibility: Literal['private', 'public'] = Field(default='private', description='Design visibility; public must be explicitly requested.')
+    wait_seconds: float = Field(default=15, ge=0, le=45, description='Wait before returning a resumable job.')
+
+    @field_validator('aspect_ratio')
+    @classmethod
+    def valid_ratio(cls, value: str) -> str:
+        if value not in ASPECT_RATIOS:
+            raise ValueError('Choose one of: ' + ', '.join(ASPECT_RATIOS))
+        return value
+
+    def payload(self) -> dict[str, Any]:
+        payload = GenerateInput(prompt=self.prompt, aspect_ratio=self.aspect_ratio,
+                                folder_id=self.folder_id, visibility=self.visibility).payload()
+        payload.update(category=self.workflow.category, checkpoint=self.workflow.checkpoint,
+                       should_enhance_prompt=self.enhance_prompt)
+        return payload
 
 
 class CreateCharacterInput(BaseModel):

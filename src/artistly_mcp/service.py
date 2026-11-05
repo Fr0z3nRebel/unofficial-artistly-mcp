@@ -5,7 +5,14 @@ from typing import Any
 
 from .client import ArtistlyClient
 from .config import Settings
-from .models import ConsistentCharacterInput, CreateCharacterInput, Design, GenerateInput, JobResult
+from .models import (
+    ConsistentCharacterInput,
+    CreateCharacterInput,
+    Design,
+    GenerateInput,
+    JobResult,
+    TextImageInput,
+)
 from .state import ArtistlyError, SessionExpired, State
 from .uploads import read_upload_image
 
@@ -16,7 +23,7 @@ class ArtistlyService:
         self.state = State(settings)
 
     async def generate(self, client: ArtistlyClient,
-                       params: GenerateInput | CreateCharacterInput | ConsistentCharacterInput) -> JobResult:
+                       params: GenerateInput | CreateCharacterInput | ConsistentCharacterInput | TextImageInput) -> JobResult:
         image = None
         if isinstance(params, ConsistentCharacterInput):
             image = await asyncio.to_thread(read_upload_image, params.image_path)
@@ -80,7 +87,8 @@ class ArtistlyService:
                 'If its process was interrupted, inspect Personal Designs before releasing the '
                 'local job with artistly-mcp abandon-job. Tracking never restarts uploads.'
             ))
-        input_type = {'character': CreateCharacterInput, 'consistent_styled': ConsistentCharacterInput}.get(
+        input_type = {'character': CreateCharacterInput, 'consistent_styled': ConsistentCharacterInput,
+                      'perfect_text': TextImageInput}.get(
             job.get('workflow'), GenerateInput)
         params = input_type(**job['request'])
         designs: list[Design] = []
@@ -101,8 +109,10 @@ class ArtistlyService:
                     detail = await client.get_design(candidate.uuid)
                     width, height = params.payload()['width'], params.payload()['height']
                     matches = detail.width == width and detail.height == height
-                    if params.workflow.rewrites_prompt:
-                        # Character Creator replaces the prompt. Require exact workflow metadata
+                    if params.workflow.rewrites_prompt and (
+                        not isinstance(params, TextImageInput) or params.enhance_prompt
+                    ):
+                        # Enhanced workflows can replace the prompt. Require exact workflow metadata
                         # and a creation time at/after preflight rather than fuzzy prompt matching.
                         try:
                             created_at = datetime.fromisoformat(detail.created_at or '').timestamp()
@@ -113,7 +123,7 @@ class ArtistlyService:
                                    and created_at >= job['created_at'] - 2)
                     else:
                         matches = matches and detail.prompt == params.prompt
-                        if isinstance(params, ConsistentCharacterInput):
+                        if isinstance(params, (ConsistentCharacterInput, TextImageInput)):
                             matches = (matches and detail.checkpoint == params.workflow.checkpoint
                                        and detail.tool_used == params.workflow.tool_used)
                     if matches:

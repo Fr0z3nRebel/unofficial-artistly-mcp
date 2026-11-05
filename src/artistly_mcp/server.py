@@ -15,6 +15,7 @@ from .models import (
     JobResult,
     Reference,
     SessionStatus,
+    TextImageInput,
 )
 from .service import ArtistlyService
 from .state import ArtistlyError
@@ -33,7 +34,8 @@ Use this workflow for Artistly requests:
 1. Call artistly_session_status first. If authentication cannot be confirmed, follow its
    message. Session setup and renewal use the local `artistly-mcp login` command. Never
    request passwords or session cookies in chat or tool arguments.
-2. Choose artistly_generate_image for a new image from a prompt;
+2. Choose artistly_generate_text_image for images containing exact lettering (include the
+   desired text in double quotes in the prompt); artistly_generate_image for other new images;
    artistly_create_character for a new character from a description; or
    artistly_consistent_character for a new scene with an existing user-provided character.
    Generation tool inputs belong inside `params`. Consistent Character requires an
@@ -54,8 +56,9 @@ Use this workflow for Artistly requests:
    local files. Return its absolute paths. Repeating a download creates additional copies.
 Use artistly_list_designs to browse existing designs and pass its next_cursor as cursor
 for subsequent pages. Existing design UUIDs also work with the get and download tools.
-Only Create From Prompt, Character Creator, and Consistent Character mode='styled' are
-supported. Realistic Images, Multi-consistent Characters, and library input are unavailable.
+Only Create From Prompt, Perfect Text in Image Designer, Character Creator, and
+Consistent Character mode='styled' are supported. Realistic Images, Multi-consistent
+Characters, and library input are unavailable.
 '''.strip())
 
     @mcp.tool(annotations=READ)
@@ -75,6 +78,24 @@ supported. Realistic Images, Multi-consistent Characters, and library input are 
         Returns a durable job_id plus status and available designs. If incomplete, use
         artistly_get_design with that job_id. Do not repeat generation to check progress.
         Only one local job may be active. Public visibility must be explicitly requested.
+        """
+        try:
+            async with ArtistlyClient(service.state) as client:
+                return await service.generate(client, params)
+        except ArtistlyError as exc:
+            raise ToolError(str(exc)) from None
+
+    @mcp.tool(annotations=WRITE)
+    async def artistly_generate_text_image(params: TextImageInput) -> JobResult:
+        """Generate an image containing lettering using Perfect Text in Image Designer.
+
+        Include the exact text in double quotes within the scene prompt. Creates one image;
+        defaults to private, square, and Artistly prompt enhancement enabled. Supports aspect
+        ratio, existing folder ID, and disabling enhancement. Review rendered spelling in the
+        result; this tool does not guarantee exact typography or automatically regenerate it.
+        Returns a durable job_id. Resume with artistly_get_design and save with
+        artistly_download_design. Do not repeat generation to check progress. Avoid concurrent
+        manual Perfect Text generations: enhancement may rewrite prompts, making matches ambiguous.
         """
         try:
             async with ArtistlyClient(service.state) as client:
