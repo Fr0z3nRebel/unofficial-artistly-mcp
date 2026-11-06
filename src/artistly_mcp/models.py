@@ -4,7 +4,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .workflows import CHARACTER, CONSISTENT_STYLED, IMAGE, PERFECT_TEXT, Workflow
+from .workflows import CHARACTER, CONSISTENT_STYLED, IMAGE, PERFECT_TEXT, TSHIRT, Workflow
 
 ASPECT_RATIOS = {
     '1:1': (1024, 1024), '16:9': (1344, 768), '21:9': (1536, 640),
@@ -61,6 +61,31 @@ class GenerateInput(BaseModel):
             'denoise_strength': '0.75', 'prefix': '', 'suffix': '', 'lora': None,
             'should_enhance_prompt': False, 'visibility': self.visibility,
         }
+
+
+class TShirtDesignInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    workflow: ClassVar[Workflow] = TSHIRT
+    prompt: str = Field(min_length=1, max_length=10000, description='A positive description of the illustration, colors, composition, and lettering to print. Describe the design itself, replacing all template wording. Include exact lettering in double quotes; keep garment/product context and exclusion phrases out of the prompt.')
+    aspect_ratio: str = Field(default='1:1', description='Supported output width:height ratio, e.g. 4:5 for portrait artwork.')
+    quantity: int = Field(default=1, ge=1, le=4, description='Number of T-shirt designs to generate.')
+    folder_id: int | None = Field(default=None, gt=0, description='Existing Artistly folder ID.')
+    visibility: Literal['private', 'public'] = Field(default='private', description='Design visibility; public must be explicitly requested.')
+    wait_seconds: float = Field(default=15, ge=0, le=45, description='Wait before returning a resumable job.')
+
+    @field_validator('aspect_ratio')
+    @classmethod
+    def valid_ratio(cls, value: str) -> str:
+        if value not in ASPECT_RATIOS:
+            raise ValueError('Choose one of: ' + ', '.join(ASPECT_RATIOS))
+        return value
+
+    def payload(self) -> dict[str, Any]:
+        payload = GenerateInput(prompt=self.prompt, quality='high_quality',
+                                aspect_ratio=self.aspect_ratio, quantity=self.quantity,
+                                folder_id=self.folder_id, visibility=self.visibility).payload()
+        payload.update(category=self.workflow.category, checkpoint=self.workflow.checkpoint)
+        return payload
 
 
 class TextImageInput(BaseModel):

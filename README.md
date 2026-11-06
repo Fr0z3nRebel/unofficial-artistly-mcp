@@ -1,13 +1,14 @@
 # Artistly MCP
 
-Local MCP server for Artistly's **Create From Prompt**, **Perfect Text in Image Designer**,
+Local MCP server for Artistly's **Create From Prompt**, **T-Shirt Designs**,
+**Perfect Text in Image Designer**,
 **AI Design Assistants → Character Creator**, and **Consistent Characters →
 3d & 2d Style Images** workflows.
 It submits and tracks images using Artistly's internal HTTP endpoints and saves original
 images directly from the CDN. Browser automation is used only for interactive sign-in.
 
 This is an unofficial integration. Internal endpoints can change. The working MVP covers
-these four workflows. Consistent Characters Realistic Images and Multi-consistent Characters,
+these five workflows. Consistent Characters Realistic Images and Multi-consistent Characters,
 illustration, upscaling, and other functions are not implemented. Artistly's
 [terms](https://artistly.ai/terms/terms.php) apply to use of the service.
 
@@ -62,6 +63,9 @@ server connection to load new tools and dependencies.
 - **artistly_session_status**: Check saved authentication and get reconnect instructions.
 - **artistly_generate_image**: Submit Create From Prompt. Inputs are nested in `params`.
   Returns a local `job_id`, status, and any identified designs.
+- **artistly_generate_tshirt_design**: Generate T-shirt artwork with High Quality always
+  enforced. Accepts a fresh `prompt`, `aspect_ratio`, `quantity` (1–4), existing folder
+  ID, visibility, and wait duration. No quality override or template prompt is accepted.
 - **artistly_generate_text_image**: Use Perfect Text in Image Designer for images with
   lettering. Include the exact text in double quotes within `prompt`. Creates one image
   with optional aspect ratio, prompt enhancement, existing folder ID, and visibility.
@@ -141,6 +145,35 @@ to reuse an existing character, always with a user-provided local reference imag
 Only one local generation job can be active; avoid concurrent manual browser generations.
 
 ## Other generation examples
+
+Example T-shirt Designs arguments:
+
+```json
+{
+  "params": {
+    "prompt": "A cheerful astronaut cat holding a coffee cup, centered flat vector illustration, bold clean outlines, simple white background, large text reading \"SPACE COFFEE\" above the cat",
+    "aspect_ratio": "4:5",
+    "quantity": 1,
+    "wait_seconds": 15
+  }
+}
+```
+
+Call **artistly_generate_tshirt_design**, then track and download using the returned
+job_id. The agent describes the illustration, composition, colors, and typography itself
+using positive language. Keep garment/product context and exclusion phrases out of the
+prompt. The supplied prompt is sent unchanged; the tool adds no negative prompts or
+extra instructions. In Artistly's UI, clicking
+a thumbnail only prefills example text; replacing it removes that example completely.
+The MCP submission is equivalent to choosing any thumbnail and replacing its entire
+prompt. It does not reuse thumbnail images or retain example wording, prefixes, or styles.
+High Quality (`highQuality` upstream) is always set and cannot be overridden. Defaults
+are one private, square image; aspect ratio and quantity are configurable. Prompt
+enhancement is disabled so the agent's supplied wording is preserved.
+A positive design-only prompt was verified live through MCP: High Quality, 4:5 output
+(896×1088), job tracking, and original JPEG download completed in 19 seconds. Visual
+inspection confirmed a standalone illustration and lettering. Other ratios and batching
+have automated coverage.
 
 Example Perfect Text arguments:
 

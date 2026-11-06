@@ -21,3 +21,6 @@ CONSISTENT_STYLED = Workflow('consistent_styled', '/ai/consistent-characters',
 PERFECT_TEXT = Workflow('perfect_text', '/ai/image-designer-v6',
                         'Perfect Text in Image Designer', 'AI Image Designer v6',
                         checkpoint='Perfect Text in Image Designer', rewrites_prompt=True)
+
+TSHIRT = Workflow('tshirt', '/ai/image-designer-v6', 'T-Shirt Designs',
+                   'AI Image Designer v6', checkpoint='T-Shirt Designs')

@@ -16,6 +16,7 @@ from .models import (
     Reference,
     SessionStatus,
     TextImageInput,
+    TShirtDesignInput,
 )
 from .service import ArtistlyService
 from .state import ArtistlyError
@@ -34,7 +35,12 @@ Use this workflow for Artistly requests:
 1. Call artistly_session_status first. If authentication cannot be confirmed, follow its
    message. Session setup and renewal use the local `artistly-mcp login` command. Never
    request passwords or session cookies in chat or tool arguments.
-2. Choose artistly_generate_text_image for images containing exact lettering (include the
+2. Choose artistly_generate_tshirt_design for T-shirt artwork. Compose a complete fresh
+   prompt describing the illustration and lettering itself, replacing all example text.
+   Use positive descriptions of the subject, composition, and colors. Keep garment/product
+   context and negative instructions out of the prompt. High Quality is always enforced;
+   choose the requested aspect ratio. Use
+   artistly_generate_text_image for other images containing exact lettering (include the
    desired text in double quotes in the prompt); artistly_generate_image for other new images;
    artistly_create_character for a new character from a description; or
    artistly_consistent_character for a new scene with an existing user-provided character.
@@ -56,7 +62,7 @@ Use this workflow for Artistly requests:
    local files. Return its absolute paths. Repeating a download creates additional copies.
 Use artistly_list_designs to browse existing designs and pass its next_cursor as cursor
 for subsequent pages. Existing design UUIDs also work with the get and download tools.
-Only Create From Prompt, Perfect Text in Image Designer, Character Creator, and
+Only Create From Prompt, T-Shirt Designs, Perfect Text in Image Designer, Character Creator, and
 Consistent Character mode='styled' are supported. Realistic Images, Multi-consistent
 Characters, and library input are unavailable.
 '''.strip())
@@ -78,6 +84,27 @@ Characters, and library input are unavailable.
         Returns a durable job_id plus status and available designs. If incomplete, use
         artistly_get_design with that job_id. Do not repeat generation to check progress.
         Only one local job may be active. Public visibility must be explicitly requested.
+        """
+        try:
+            async with ArtistlyClient(service.state) as client:
+                return await service.generate(client, params)
+        except ArtistlyError as exc:
+            raise ToolError(str(exc)) from None
+
+    @mcp.tool(annotations=WRITE)
+    async def artistly_generate_tshirt_design(params: TShirtDesignInput) -> JobResult:
+        """Generate T-shirt artwork using AI Image Designer v6 → T-Shirt Designs.
+
+        Compose a fresh positive description of the illustration and typography to print.
+        Describe the visual design itself, replacing the template example completely. Keep
+        garment/product context and negative instructions out of the generation prompt.
+        The prompt is sent unchanged; no exclusion phrases or negative prompts are added.
+        Thumbnail templates only prefill prompts; no template image
+        is used as a reference. Include requested lettering in double quotes. Always submits
+        High Quality; quality cannot be overridden. Supports aspect ratio, quantity 1–4,
+        existing folder ID, and visibility (private by default). Returns a durable job_id;
+        resume with artistly_get_design and save with artistly_download_design. Never repeat
+        generation just to check progress or recover from a timeout.
         """
         try:
             async with ArtistlyClient(service.state) as client:

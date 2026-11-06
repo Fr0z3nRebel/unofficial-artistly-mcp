@@ -12,6 +12,7 @@ from .models import (
     GenerateInput,
     JobResult,
     TextImageInput,
+    TShirtDesignInput,
 )
 from .state import ArtistlyError, SessionExpired, State
 from .uploads import read_upload_image
@@ -23,7 +24,7 @@ class ArtistlyService:
         self.state = State(settings)
 
     async def generate(self, client: ArtistlyClient,
-                       params: GenerateInput | CreateCharacterInput | ConsistentCharacterInput | TextImageInput) -> JobResult:
+                       params: GenerateInput | CreateCharacterInput | ConsistentCharacterInput | TextImageInput | TShirtDesignInput) -> JobResult:
         image = None
         if isinstance(params, ConsistentCharacterInput):
             image = await asyncio.to_thread(read_upload_image, params.image_path)
@@ -88,7 +89,7 @@ class ArtistlyService:
                 'local job with artistly-mcp abandon-job. Tracking never restarts uploads.'
             ))
         input_type = {'character': CreateCharacterInput, 'consistent_styled': ConsistentCharacterInput,
-                      'perfect_text': TextImageInput}.get(
+                      'perfect_text': TextImageInput, 'tshirt': TShirtDesignInput}.get(
             job.get('workflow'), GenerateInput)
         params = input_type(**job['request'])
         designs: list[Design] = []
@@ -123,7 +124,7 @@ class ArtistlyService:
                                    and created_at >= job['created_at'] - 2)
                     else:
                         matches = matches and detail.prompt == params.prompt
-                        if isinstance(params, (ConsistentCharacterInput, TextImageInput)):
+                        if params.workflow.checkpoint is not None:
                             matches = (matches and detail.checkpoint == params.workflow.checkpoint
                                        and detail.tool_used == params.workflow.tool_used)
                     if matches:
