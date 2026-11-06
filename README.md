@@ -17,8 +17,9 @@ illustration, upscaling, and other functions are not implemented. Artistly's
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```sh
-cd /Users/john/Documents/ChatGPT/artistly-mcp
-uv sync --extra dev --locked
+git clone https://github.com/Fr0z3nRebel/unofficial-artistly-mcp.git artistly-mcp
+cd artistly-mcp
+uv sync --locked
 uv run playwright install chromium
 uv run artistly-mcp login
 uv run artistly-mcp status
@@ -45,18 +46,20 @@ Use this local stdio server definition in a client that supports MCP:
 {
   "mcpServers": {
     "artistly": {
-      "command": "/Users/john/Documents/ChatGPT/artistly-mcp/.venv/bin/artistly-mcp",
+      "command": "/absolute/path/to/artistly-mcp/.venv/bin/artistly-mcp",
       "args": ["serve"]
     }
   }
 }
 ```
 
-`examples/mcp.json` contains that configuration. Client-specific configuration formats may
-differ. The server has no HTTP listener. It writes only MCP protocol messages to stdout.
-No credentials belong in the MCP configuration.
-After updating the project, run `uv sync --extra dev --locked` and restart your MCP
-server connection to load new tools and dependencies.
+`examples/mcp.json` contains this template. Replace `/absolute/path/to/artistly-mcp`
+with your checkout’s absolute path; the placeholder is not executable as written.
+Client-specific configuration formats may differ. The server has no HTTP listener. It
+writes only MCP protocol messages to stdout. No credentials belong in the MCP
+configuration. After updating the project, run `uv sync --locked` and restart your MCP
+server connection to load new tools and dependencies. If you move the checkout, run the
+sync command in its new location and update the absolute command path in your client.
 
 ## Tools
 
@@ -84,6 +87,12 @@ server connection to load new tools and dependencies.
   optional (0–45); waiting applies to local jobs. No generation is submitted by this tool.
 - **artistly_download_design**: Save all originals for a completed job or ready design UUID.
   Returns absolute local paths and total bytes. Repeating it creates new copies.
+
+All five generation tools take their inputs inside `params`. Session, list, get, and
+download tools take top-level arguments, as shown below. Unsupported fields are
+rejected; only Create From Prompt accepts a `quality` argument. Generation defaults to a
+15-second wait. `wait_seconds` (0–45) limits how long the call waits before returning a
+resumable job; it does not set a generation deadline or cancel work.
 
 ## Complete agent workflow
 
@@ -139,10 +148,11 @@ from a timeout. If no ID was returned before an interruption, use the local
 Return the absolute paths in `paths` to the user. Another download call creates more
 copies, so use the returned paths instead of downloading again just to display a result.
 
-Use the same wait/download sequence for Character Creator and Consistent Character.
-Choose Character Creator to invent a character from text. Choose Consistent Character
-to reuse an existing character, always with a user-provided local reference image.
-Only one local generation job can be active; avoid concurrent manual browser generations.
+Use the same wait/download sequence for all five generation tools, including T-shirt
+Designs and Perfect Text. Choose Character Creator to invent a character from text.
+Choose Consistent Character to reuse an existing character, always with a user-provided
+local reference image. Only one local generation job can be active; avoid concurrent
+manual browser generations.
 
 ## Other generation examples
 
@@ -163,17 +173,19 @@ Call **artistly_generate_tshirt_design**, then track and download using the retu
 job_id. The agent describes the illustration, composition, colors, and typography itself
 using positive language. Keep garment/product context and exclusion phrases out of the
 prompt. The supplied prompt is sent unchanged; the tool adds no negative prompts or
-extra instructions. In Artistly's UI, clicking
-a thumbnail only prefills example text; replacing it removes that example completely.
-The MCP submission is equivalent to choosing any thumbnail and replacing its entire
-prompt. It does not reuse thumbnail images or retain example wording, prefixes, or styles.
-High Quality (`highQuality` upstream) is always set and cannot be overridden. Defaults
-are one private, square image; aspect ratio and quantity are configurable. Prompt
-enhancement is disabled so the agent's supplied wording is preserved.
-A positive design-only prompt was verified live through MCP: High Quality, 4:5 output
-(896×1088), job tracking, and original JPEG download completed in 19 seconds. Visual
-inspection confirmed a standalone illustration and lettering. Other ratios and batching
-have automated coverage.
+extra instructions. In Artistly's UI, clicking a thumbnail only prefills example text;
+replacing it removes that example completely. The MCP submission is equivalent to
+choosing any thumbnail and replacing its entire prompt. It does not reuse thumbnail
+images or retain example wording, prefixes, or styles. High Quality (`highQuality`
+upstream) is always set and cannot be overridden. Defaults are one private, square
+image; aspect ratio and quantity are configurable. Prompt enhancement is disabled so the
+agent's supplied wording is preserved. A positive design-only prompt was verified live
+through MCP: High Quality, 4:5 output (896×1088), job tracking, and original JPEG
+download completed in 19 seconds. Visual inspection confirmed a standalone illustration
+and lettering. Other ratios and batching have automated coverage. The downloaded
+original is a raster image; describing a vector style does not produce an SVG. The tool
+does not remove backgrounds, guarantee transparency, or prepare print-resolution files.
+Inspect the artwork and lettering before printing.
 
 Example Perfect Text arguments:
 
@@ -244,23 +256,49 @@ Only styled mode is enabled. Realistic Images remains deferred after the browser
 workflow returned face-processing failures. Its gender and High/Low similarity controls
 are not inputs to styled mode. Multi-consistent Characters is also deferred.
 
-Example download arguments:
+Example download arguments (replace the illustrative ID with an actual design UUID or job ID):
 
 ```json
-{"reference": "REPLACE_WITH_DESIGN_UUID_OR_JOB_ID"}
+{"reference": "job_0123456789abcdef0123456789abcdef"}
 ```
 
-Generation supports `fast` and `high_quality`, quantities 1–4, optional existing `folder_id`,
-and explicit `private`/`public` visibility. Defaults are private, Fast, square, one image.
-Aspect ratios: `1:1`, `16:9`, `21:9`, `3:2`, `2:3`, `4:5`, `5:4`, `3:4`, `4:3`, `9:16`, `9:21`.
-Only Fast, square, quantity-one generation has been verified live; other input mappings
+**Create From Prompt** supports `fast` and `high_quality`, quantities 1–4, optional
+existing `folder_id`, and explicit `private`/`public` visibility. Its defaults are
+private, Fast, square, one image. The other workflows expose only the controls described
+above. Public visibility must be explicitly requested by the user.
+
+All tools with an `aspect_ratio` input accept these labels: `1:1`, `16:9`, `21:9`,
+`3:2`, `2:3`, `4:5`, `5:4`, `3:4`, `4:3`, `9:16`, `9:21`. For Create From Prompt, only
+Fast, square, quantity-one generation has been verified live; other input mappings
 follow the observed frontend and have automated coverage, not live generation coverage.
+
+Ratio labels map to Artistly’s fixed pixel dimensions, which may approximate the named
+ratio; for example, `4:5` produces 896×1088 and `16:9` produces 1344×768. Use returned
+`width` and `height` when exact dimensions matter.
+
+## Browse and download existing designs
+
+Call **artistly_list_designs** with `{}` for the first page, or use filters:
+
+```json
+{"folder_id": 12, "tool_used": "AI Image Designer v6"}
+```
+
+Pass the actual returned `next_cursor` unchanged as `cursor` on the next list call,
+keeping the same filters. Omit `folder_id` to include all folders. Stop when
+`next_cursor` is null. Listing does not start generation. Use the selected design’s
+`uuid` as `reference` for **artistly_get_design** and **artistly_download_design**; a
+design with `ready: true` can be downloaded directly. Local `job_…` IDs refer to records
+in the configured state directory, while design UUIDs identify upstream Artistly
+designs. Both are accepted by the get and download tools.
 
 Try these requests in your assistant:
 
 - “Check my Artistly session, generate a private square fox illustration, then save it.”
 - “Show my recent Artistly designs and download the first completed design.”
 - “Check the status of this Artistly job; resume it without creating another image.”
+- “Create a 4:5 illustration with bold lettering reading ‘SPACE COFFEE’ for a T-shirt design.”
+- “Use Perfect Text to make a cafe storefront with a sign reading ‘GOOD MORNING’.”
 - “Use Character Creator to make a polar bear in a blue hoodie, then download the image.”
 - “Use this local character image to make a 16:9 bench scene with Consistent Character.”
 
@@ -271,13 +309,34 @@ Defaults:
 - Session and SQLite job database: `~/.local/share/artistly-mcp/`
 - Original images: `~/Downloads/Artistly/`
 
-Override with `ARTISTLY_STATE_DIR` and `ARTISTLY_DOWNLOAD_DIR`. Use the same state directory
-for login and server processes. State directories are owner-only (0700); session files and
-the job database are 0600. Session cookies are sensitive bearer credentials stored as
-protected plaintext, not encrypted. They are never tool arguments, tool results, or logs.
-Use a private state directory outside a shared checkout. Download paths cannot be selected
-through MCP tool input, files are never overwritten, and only HTTPS URLs on Artistly's CDN
-are downloaded. Each image has a 50 MiB limit and must match its declared image format.
+Override with `ARTISTLY_STATE_DIR` and `ARTISTLY_DOWNLOAD_DIR`. MCP clients that support
+an `env` object can set these variables on the server entry:
+
+```json
+{
+  "ARTISTLY_STATE_DIR": "/absolute/private/path/artistly-state",
+  "ARTISTLY_DOWNLOAD_DIR": "/absolute/path/to/artistly-images"
+}
+```
+
+These are optional overrides, not paths to copy literally. Use the same state directory
+for login and server processes; when overriding it, run login with that variable too:
+
+```sh
+ARTISTLY_STATE_DIR=/absolute/private/path/artistly-state uv run artistly-mcp login
+```
+
+A false `authenticated` result can also indicate a connection problem or rate limit.
+Follow the returned message before deciding that another login is needed.
+
+State directories are owner-only (0700); session files and the job database are 0600.
+Session cookies are sensitive bearer credentials stored as protected plaintext, not
+encrypted. They are never tool arguments, tool results, or logs. Use a private state
+directory outside a shared checkout. Download paths cannot be selected through MCP tool
+input, files are never overwritten, and only HTTPS URLs on Artistly's CDN are
+downloaded. Each image has a 50 MiB limit and must match its declared image format. If a
+download fails after saving some originals, those successful files remain; check them
+before repeating the download, which creates new copies.
 
 The server records intent **before** submitting. A timed-out call, interrupted server, or
 uncertain HTTP response must be followed by `artistly_get_design` using its job ID. Submission
@@ -287,8 +346,9 @@ is never automatically retried. If the call was interrupted before returning an 
 uv run artistly-mcp jobs
 ```
 
-Only one local job can be active across server processes sharing a state directory.
-The observed submission redirects to Personal Designs rather than returning a design ID.
+`jobs` shows the 20 most recent local jobs, not the entire Artistly design library. Only
+one local job can be active across server processes sharing a state directory. The
+observed submission redirects to Personal Designs rather than returning a design ID.
 Correlation compares new design UUIDs with the pre-submission list, then checks prompt,
 dimensions, and category. Concurrent manual generations using the same settings can make
 correlation ambiguous; avoid generating manually while a local job is active. Ambiguous
@@ -328,19 +388,30 @@ as `private` are normalized into local job states; `private` alone is not an err
 ## Development and verification
 
 ```sh
+uv sync --extra dev --locked
 uv run pytest -q
 uv run ruff check src tests
+git diff --check
+uv build --python .venv/bin/python
 ```
 
-Tests use synthetic data and HTTP mocks: complete generation/download, session expiry and
-reconnection, fresh CSRF metadata, uncertain submissions, restart recovery, cross-process
-serialization, ambiguous and multi-image results, pagination, download validation, file
-permissions, and real MCP stdio handshake/tool calls. Tests never submit paid/live generations.
-Character tests additionally cover rewritten prompts, route-specific CSRF metadata,
-checkpoint/time checks, shared job locking, and compatibility with old image jobs.
-Consistent Character tests cover required image input, decoded file validation, chunk
-offsets, invalid upload references, failed uploads, and recovery without duplicate uploads.
-`evals/` includes a frozen fixture and ten read-only agent evaluation questions.
+Tests use synthetic data and HTTP mocks: complete generation/download, session expiry
+and reconnection, fresh CSRF metadata, uncertain submissions, restart recovery,
+cross-process serialization, ambiguous and multi-image results, pagination, download
+validation, file permissions, and real MCP stdio handshake/tool calls. Tests never
+submit paid/live generations. Character tests additionally cover rewritten prompts,
+route-specific CSRF metadata, checkpoint/time checks, shared job locking, and
+compatibility with old image jobs. Consistent Character tests cover required image
+input, decoded file validation, chunk offsets, invalid upload references, failed
+uploads, and recovery without duplicate uploads. Perfect Text tests cover enhancement
+settings, single-image submission, and rewritten prompt correlation. T-shirt tests cover
+forced High Quality, unchanged positive prompts, empty negative prompts, workflow
+metadata, and supported aspect ratios and quantities. The current suite contains 100
+tests.
+
+`evals/` includes a frozen fixture and ten read-only agent evaluation questions,
+separate from pytest. It does not include an executable evaluation harness; see
+[evals/README.md](evals/README.md) for scope and usage.
 
 The original live HTTP smoke test and downloaded images are in ignored `test-output/`.
 These are local evidence, not required runtime files. Source, dependency lock, and tests
